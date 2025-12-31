@@ -39,22 +39,12 @@ TransactionView::TransactionView(QWidget *parent) :
     QWidget *filterBar = new QWidget(this);
     filterBar->setObjectName("txFilterBar");
     QHBoxLayout *hlayout = new QHBoxLayout(filterBar);
-    hlayout->setContentsMargins(8, 6, 8, 6);
-#ifdef Q_OS_MAC
-    hlayout->setSpacing(5);
-    hlayout->addSpacing(26);
-#else
-    hlayout->setSpacing(0);
-    hlayout->addSpacing(23);
-#endif
+    hlayout->setContentsMargins(12, 8, 12, 8);
+    hlayout->setSpacing(10);
 
     dateWidget = new QComboBox(this);
     dateWidget->setObjectName("txDateFilter");
-#ifdef Q_OS_MAC
-    dateWidget->setFixedWidth(121);
-#else
-    dateWidget->setFixedWidth(120);
-#endif
+    dateWidget->setMinimumWidth(130);
     dateWidget->addItem(tr("All"), All);
     dateWidget->addItem(tr("Today"), Today);
     dateWidget->addItem(tr("This week"), ThisWeek);
@@ -62,15 +52,20 @@ TransactionView::TransactionView(QWidget *parent) :
     dateWidget->addItem(tr("Last month"), LastMonth);
     dateWidget->addItem(tr("This year"), ThisYear);
     dateWidget->addItem(tr("Range..."), Range);
-    hlayout->addWidget(dateWidget);
+    QWidget *dateGroup = new QWidget(filterBar);
+    dateGroup->setObjectName("txFilterGroup");
+    QVBoxLayout *dateLayout = new QVBoxLayout(dateGroup);
+    dateLayout->setContentsMargins(6, 2, 6, 2);
+    dateLayout->setSpacing(4);
+    QLabel *dateLabel = new QLabel(tr("Date"), dateGroup);
+    dateLabel->setObjectName("txFilterLabel");
+    dateLayout->addWidget(dateLabel);
+    dateLayout->addWidget(dateWidget);
+    hlayout->addWidget(dateGroup);
 
     typeWidget = new QComboBox(this);
     typeWidget->setObjectName("txTypeFilter");
-#ifdef Q_OS_MAC
-    typeWidget->setFixedWidth(121);
-#else
-    typeWidget->setFixedWidth(120);
-#endif
+    typeWidget->setMinimumWidth(130);
 
     typeWidget->addItem(tr("All"), TransactionFilterProxy::ALL_TYPES);
     typeWidget->addItem(tr("Received with"), TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddress) |
@@ -82,29 +77,54 @@ TransactionView::TransactionView(QWidget *parent) :
     typeWidget->addItem(tr("POW mined"), TransactionFilterProxy::TYPE(TransactionRecord::Generated));
     typeWidget->addItem(tr("Other"), TransactionFilterProxy::TYPE(TransactionRecord::Other));
 
-    hlayout->addWidget(typeWidget);
+    QWidget *typeGroup = new QWidget(filterBar);
+    typeGroup->setObjectName("txFilterGroup");
+    QVBoxLayout *typeLayout = new QVBoxLayout(typeGroup);
+    typeLayout->setContentsMargins(6, 2, 6, 2);
+    typeLayout->setSpacing(4);
+    QLabel *typeLabel = new QLabel(tr("Type"), typeGroup);
+    typeLabel->setObjectName("txFilterLabel");
+    typeLayout->addWidget(typeLabel);
+    typeLayout->addWidget(typeWidget);
+    hlayout->addWidget(typeGroup);
 
     addressWidget = new QLineEdit(this);
     addressWidget->setObjectName("txAddressFilter");
 #if QT_VERSION >= 0x040700
     /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-    addressWidget->setPlaceholderText(tr("Enter address or label to search"));
+    addressWidget->setPlaceholderText(tr("Search address or label"));
 #endif
-    hlayout->addWidget(addressWidget);
+    addressWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    QWidget *searchGroup = new QWidget(filterBar);
+    searchGroup->setObjectName("txFilterGroup");
+    searchGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    QVBoxLayout *searchLayout = new QVBoxLayout(searchGroup);
+    searchLayout->setContentsMargins(6, 2, 6, 2);
+    searchLayout->setSpacing(4);
+    QLabel *searchLabel = new QLabel(tr("Search"), searchGroup);
+    searchLabel->setObjectName("txFilterLabel");
+    searchLayout->addWidget(searchLabel);
+    searchLayout->addWidget(addressWidget);
+    hlayout->addWidget(searchGroup, 1);
 
     amountWidget = new QLineEdit(this);
     amountWidget->setObjectName("txAmountFilter");
 #if QT_VERSION >= 0x040700
     /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-    amountWidget->setPlaceholderText(tr("Min amount"));
+    amountWidget->setPlaceholderText(tr("Min amount (CURE)"));
 #endif
-#ifdef Q_OS_MAC
-    amountWidget->setFixedWidth(97);
-#else
-    amountWidget->setFixedWidth(100);
-#endif
+    amountWidget->setMinimumWidth(120);
     amountWidget->setValidator(new QDoubleValidator(0, 1e20, 8, this));
-    hlayout->addWidget(amountWidget);
+    QWidget *amountGroup = new QWidget(filterBar);
+    amountGroup->setObjectName("txFilterGroup");
+    QVBoxLayout *amountLayout = new QVBoxLayout(amountGroup);
+    amountLayout->setContentsMargins(6, 2, 6, 2);
+    amountLayout->setSpacing(4);
+    QLabel *amountLabel = new QLabel(tr("Amount"), amountGroup);
+    amountLabel->setObjectName("txFilterLabel");
+    amountLayout->addWidget(amountLabel);
+    amountLayout->addWidget(amountWidget);
+    hlayout->addWidget(amountGroup);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
     vlayout->setContentsMargins(0,0,0,0);
@@ -117,11 +137,7 @@ TransactionView::TransactionView(QWidget *parent) :
     vlayout->setSpacing(0);
     int width = view->verticalScrollBar()->sizeHint().width();
     // Cover scroll bar width with spacing
-#ifdef Q_OS_MAC
-    hlayout->addSpacing(width+2);
-#else
     hlayout->addSpacing(width);
-#endif
     // Always show scroll bar
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     view->setTabKeyNavigation(false);
@@ -389,9 +405,10 @@ QWidget *TransactionView::createDateRangeWidget()
     dateRangeWidget->setFrameStyle(QFrame::Panel | QFrame::Raised);
     dateRangeWidget->setContentsMargins(1,1,1,1);
     QHBoxLayout *layout = new QHBoxLayout(dateRangeWidget);
-    layout->setContentsMargins(8,6,8,6);
-    layout->addSpacing(23);
-    layout->addWidget(new QLabel(tr("Range:")));
+    layout->setContentsMargins(12,6,12,6);
+    QLabel *rangeLabel = new QLabel(tr("Range"), dateRangeWidget);
+    rangeLabel->setObjectName("txFilterLabel");
+    layout->addWidget(rangeLabel);
 
     dateFrom = new QDateTimeEdit(this);
     dateFrom->setDisplayFormat("dd/MM/yy");
@@ -399,7 +416,9 @@ QWidget *TransactionView::createDateRangeWidget()
     dateFrom->setMinimumWidth(100);
     dateFrom->setDate(QDate::currentDate().addDays(-7));
     layout->addWidget(dateFrom);
-    layout->addWidget(new QLabel(tr("to")));
+    QLabel *toLabel = new QLabel(tr("to"), dateRangeWidget);
+    toLabel->setObjectName("txFilterLabel");
+    layout->addWidget(toLabel);
 
     dateTo = new QDateTimeEdit(this);
     dateTo->setDisplayFormat("dd/MM/yy");

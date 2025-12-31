@@ -24,6 +24,7 @@ class QTableView;
 class QAbstractItemModel;
 class QModelIndex;
 class QProgressBar;
+class QFrame;
 class QStackedWidget;
 class QToolButton;
 class QUrl;
@@ -55,6 +56,8 @@ protected:
     void closeEvent(QCloseEvent *event);
     void dragEnterEvent(QDragEnterEvent *event);
     void dropEvent(QDropEvent *event);
+    bool eventFilter(QObject *object, QEvent *event);
+    void resizeEvent(QResizeEvent *event);
 
 private:
     ClientModel *clientModel;
@@ -112,6 +115,8 @@ private:
     QWidget *balanceCard;
     QLabel *balanceTitleLabel;
     QLabel *balanceValueLabel;
+    QToolButton *lockToggleButton;
+    QFrame *lockDivider;
 
     /** Create the main UI actions. */
     void createActions();
@@ -190,6 +195,7 @@ private slots:
     void changePassphrase();
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
+    void toggleLockState();
     void lockWallet();
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */

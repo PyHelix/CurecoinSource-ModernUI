@@ -51,8 +51,10 @@ public:
             foreground = qvariant_cast<QColor>(value);
         }
 
+        QFontMetrics fm(painter->font());
         painter->setPen(foreground);
-        painter->drawText(addressRect, Qt::AlignLeft|Qt::AlignVCenter, address);
+        QString addressText = fm.elidedText(address, Qt::ElideRight, addressRect.width());
+        painter->drawText(addressRect, Qt::AlignLeft|Qt::AlignVCenter, addressText);
 
         if(amount < 0)
         {
@@ -72,10 +74,36 @@ public:
         {
             amountText = QString("[") + amountText + QString("]");
         }
-        painter->drawText(amountRect, Qt::AlignRight|Qt::AlignVCenter, amountText);
 
-        painter->setPen(option.palette.color(QPalette::Text));
-        painter->drawText(amountRect, Qt::AlignLeft|Qt::AlignVCenter, GUIUtil::dateTimeStr(date));
+        int amountWidth = fm.horizontalAdvance(amountText);
+        int minAmountWidth = 60;
+        int rightWidth = qMin(amountRect.width(), qMax(amountWidth, minAmountWidth));
+        int gap = 6;
+        int dateWidth = amountRect.width() - rightWidth - gap;
+        if (dateWidth < 0)
+        {
+            rightWidth = amountRect.width();
+            dateWidth = 0;
+        }
+
+        QRect amountRightRect(amountRect.left() + amountRect.width() - rightWidth,
+                              amountRect.top(), rightWidth, amountRect.height());
+        QRect dateRect(amountRect.left(), amountRect.top(), dateWidth, amountRect.height());
+        painter->drawText(amountRightRect, Qt::AlignRight|Qt::AlignVCenter, amountText);
+
+        if (dateWidth > 0)
+        {
+            painter->setPen(option.palette.color(QPalette::Text));
+            QString dateText = GUIUtil::dateTimeStr(date);
+            if (fm.horizontalAdvance(dateText) > dateWidth)
+            {
+                QString shortDate = date.toString("MM/dd/yy hh:mm");
+                if (fm.horizontalAdvance(shortDate) <= dateWidth)
+                    dateText = shortDate;
+            }
+            dateText = fm.elidedText(dateText, Qt::ElideRight, dateWidth);
+            painter->drawText(dateRect, Qt::AlignLeft|Qt::AlignVCenter, dateText);
+        }
 
         painter->restore();
     }

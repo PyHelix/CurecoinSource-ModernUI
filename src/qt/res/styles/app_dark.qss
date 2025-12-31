@@ -15,6 +15,20 @@ QStackedWidget#centralStack {
     background: transparent;
 }
 
+QFrame#topHeader {
+    background: #0f172a;
+    border-bottom: 1px solid #1f2a38;
+}
+
+QFrame#topHeader QToolButton#darkModeToggle {
+    background: #111827;
+    border: 1px solid #273244;
+    border-radius: 12px;
+    padding: 6px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
 QToolBar#navBar {
     background: #0b1220;
     border-right: 1px solid #1e2a3a;
@@ -50,6 +64,36 @@ QToolBar#navBar QToolButton#darkModeToggle {
     min-width: 32px;
     min-height: 32px;
     margin: 8px 6px;
+}
+
+QToolBar#navBar QToolButton#lockToggle {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 4px 4px 6px;
+    margin: 0px;
+    text-align: center;
+    font-size: 9pt;
+}
+
+QToolBar#navBar QToolButton#lockToggle:hover {
+    background: rgba(76, 141, 255, 0.18);
+    border: 1px solid rgba(76, 141, 255, 0.35);
+}
+
+QToolBar#navBar QWidget#lockSection {
+    margin: 2px 0px 10px;
+}
+
+QFrame#lockDivider {
+    background: #2a3a4f;
+    margin: 2px 14px 8px;
+    min-height: 2px;
+    border-radius: 1px;
+}
+
+QLabel#foldingLogo {
+    margin: 6px 4px 8px;
 }
 
 QToolBar#actionBar {
@@ -125,6 +169,16 @@ QFrame#txDateRange {
     background: #0f172a;
     border: 1px solid #1f2a38;
     border-radius: 12px;
+}
+
+QWidget#txFilterGroup {
+    background: transparent;
+    border: 0px;
+}
+
+QLabel#txFilterLabel {
+    font-size: 8.5pt;
+    color: #94a3b8;
 }
 
 QStatusBar {
@@ -299,10 +353,18 @@ QListView::item:hover {
 QHeaderView::section {
     background: #0f172a;
     color: #cbd5e1;
-    padding: 10px 12px;
+    padding: 9px 12px;
     border: 0px;
     border-bottom: 1px solid #1f2a38;
     font-weight: 600;
+}
+
+QHeaderView::section:first {
+    border-top-left-radius: 10px;
+}
+
+QHeaderView::section:last {
+    border-top-right-radius: 10px;
 }
 
 QHeaderView::up-arrow {

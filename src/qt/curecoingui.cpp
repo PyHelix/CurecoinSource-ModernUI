@@ -55,6 +55,9 @@
 #include <QSettings>
 #include <QTimer>
 #include <QDragEnterEvent>
+#include <QKeyEvent>
+#include <QImage>
+#include <QResizeEvent>
 #include <QUrl>
 #include <QStyle>
 #include <QToolButton>
@@ -98,9 +101,12 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     toolbarMenu(0),
     balanceCard(0),
     balanceTitleLabel(0),
-    balanceValueLabel(0)
+    balanceValueLabel(0),
+    lockToggleButton(0),
+    lockDivider(0)
 {
-    resize(850, 550);
+    resize(892, 776);
+    setMinimumSize(892, 776);
     setWindowTitle(tr("Curecoin") + " - " + tr("Wallet"));
 #ifndef Q_OS_MAC
     qApp->setWindowIcon(QIcon(":icons/curecoin"));
@@ -158,9 +164,47 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
-    setCentralWidget(centralWidget);
     centralWidget->setObjectName("centralStack");
     centralWidget->setContentsMargins(16, 16, 16, 16);
+
+    QWidget *contentRoot = new QWidget(this);
+    contentRoot->setObjectName("contentRoot");
+    QVBoxLayout *contentLayout = new QVBoxLayout(contentRoot);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
+
+    QFrame *topHeader = new QFrame(contentRoot);
+    topHeader->setObjectName("topHeader");
+    QHBoxLayout *headerLayout = new QHBoxLayout(topHeader);
+    headerLayout->setContentsMargins(16, 8, 16, 8);
+    headerLayout->setSpacing(10);
+    headerLayout->addStretch();
+
+    QToolButton *darkToggle = new QToolButton(topHeader);
+    darkToggle->setDefaultAction(darkModeAction);
+    darkToggle->setObjectName("darkModeToggle");
+    darkToggle->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    darkToggle->setAutoRaise(true);
+    headerLayout->addWidget(darkToggle);
+
+    balanceCard = new QFrame(topHeader);
+    balanceCard->setObjectName("balanceCard");
+    QVBoxLayout *balanceLayout = new QVBoxLayout(balanceCard);
+    balanceLayout->setContentsMargins(12, 6, 12, 6);
+    balanceLayout->setSpacing(2);
+    balanceTitleLabel = new QLabel(tr("Available (CURE)"), balanceCard);
+    balanceTitleLabel->setObjectName("balanceTitle");
+    balanceTitleLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    balanceValueLabel = new QLabel(tr("--"), balanceCard);
+    balanceValueLabel->setObjectName("balanceValue");
+    balanceValueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    balanceLayout->addWidget(balanceTitleLabel);
+    balanceLayout->addWidget(balanceValueLabel);
+    headerLayout->addWidget(balanceCard);
+
+    contentLayout->addWidget(topHeader);
+    contentLayout->addWidget(centralWidget);
+    setCentralWidget(contentRoot);
 
     // Create status bar
     statusBar();
@@ -423,19 +467,48 @@ void curecoinGUI::createToolBars()
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
 
-    QWidget *navSpacer = new QWidget(toolbar);
-    navSpacer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-    toolbar->addWidget(navSpacer);
+    QWidget *lockSection = new QWidget(toolbar);
+    lockSection->setObjectName("lockSection");
+    lockSection->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    QVBoxLayout *lockLayout = new QVBoxLayout(lockSection);
+    lockLayout->setContentsMargins(8, 6, 8, 10);
+    lockLayout->setSpacing(8);
 
-    toolbar->addAction(darkModeAction);
-    QWidget *darkWidget = toolbar->widgetForAction(darkModeAction);
-    if (darkWidget)
-    {
-        darkWidget->setObjectName("darkModeToggle");
-        QToolButton *darkButton = qobject_cast<QToolButton*>(darkWidget);
-        if (darkButton)
-            darkButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    }
+    QWidget *lockArea = new QWidget(lockSection);
+    lockArea->setObjectName("lockArea");
+    lockArea->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    QVBoxLayout *lockAreaLayout = new QVBoxLayout(lockArea);
+    lockAreaLayout->setContentsMargins(0, 0, 0, 0);
+    lockAreaLayout->setSpacing(6);
+    lockAreaLayout->addStretch(1);
+
+    lockDivider = new QFrame(lockArea);
+    lockDivider->setObjectName("lockDivider");
+    lockDivider->setFrameShape(QFrame::HLine);
+    lockDivider->setFrameShadow(QFrame::Plain);
+    lockDivider->setFixedHeight(2);
+    lockDivider->setFixedWidth(100);
+    lockDivider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    lockAreaLayout->addWidget(lockDivider, 0, Qt::AlignHCenter);
+
+    lockToggleButton = new QToolButton(lockArea);
+    lockToggleButton->setObjectName("lockToggle");
+    lockToggleButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    lockToggleButton->setAutoRaise(true);
+    lockToggleButton->setText(tr("Lock"));
+    lockToggleButton->setIcon(QIcon(":/icons/lock_closed"));
+    lockToggleButton->setToolTip(tr("Lock wallet"));
+    lockToggleButton->setIconSize(QSize(24, 24));
+    lockToggleButton->setFixedHeight(72);
+    lockToggleButton->setFixedWidth(112);
+    lockToggleButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    lockAreaLayout->addWidget(lockToggleButton, 0, Qt::AlignHCenter);
+    connect(lockToggleButton, SIGNAL(clicked()), this, SLOT(toggleLockState()));
+    lockAreaLayout->addStretch(1);
+
+    lockLayout->addWidget(lockArea, 1);
+
+    toolbar->addWidget(lockSection);
 }
 
 void curecoinGUI::updateProgressBarStyle()
@@ -1022,6 +1095,16 @@ void curecoinGUI::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
 }
 
+void curecoinGUI::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+}
+
+bool curecoinGUI::eventFilter(QObject *object, QEvent *event)
+{
+    return QMainWindow::eventFilter(object, event);
+}
+
 void curecoinGUI::handleURI(QString strURI)
 {
     // URI has to be valid
@@ -1045,6 +1128,14 @@ void curecoinGUI::setEncryptionStatus(int status)
         unlockWalletAction->setVisible(false);
         lockWalletAction->setVisible(false);
         encryptWalletAction->setEnabled(true);
+        if (lockToggleButton)
+        {
+            lockToggleButton->setVisible(false);
+        }
+        if (lockDivider)
+        {
+            lockDivider->setVisible(false);
+        }
         break;
     case WalletModel::Unlocked:
         labelEncryptionIcon->show();
@@ -1055,6 +1146,18 @@ void curecoinGUI::setEncryptionStatus(int status)
         unlockWalletAction->setVisible(false);
         lockWalletAction->setVisible(true);
         encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
+        if (lockToggleButton)
+        {
+            lockToggleButton->setEnabled(true);
+            lockToggleButton->setVisible(true);
+            lockToggleButton->setText(tr("Lock"));
+            lockToggleButton->setIcon(QIcon(":/icons/lock_closed"));
+            lockToggleButton->setToolTip(tr("Lock wallet"));
+        }
+        if (lockDivider)
+        {
+            lockDivider->setVisible(true);
+        }
         break;
     case WalletModel::Locked:
         labelEncryptionIcon->show();
@@ -1065,6 +1168,18 @@ void curecoinGUI::setEncryptionStatus(int status)
         lockWalletAction->setVisible(false);
         changePassphraseAction->setEnabled(true);
         encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
+        if (lockToggleButton)
+        {
+            lockToggleButton->setEnabled(true);
+            lockToggleButton->setVisible(true);
+            lockToggleButton->setText(tr("Unlock"));
+            lockToggleButton->setIcon(QIcon(":/icons/lock_open"));
+            lockToggleButton->setToolTip(tr("Unlock wallet"));
+        }
+        if (lockDivider)
+        {
+            lockDivider->setVisible(true);
+        }
         break;
     }
 }
@@ -1118,6 +1233,17 @@ void curecoinGUI::unlockWallet()
         dlg.setModel(walletModel);
         dlg.exec();
     }
+}
+
+void curecoinGUI::toggleLockState()
+{
+    if(!walletModel)
+        return;
+    WalletModel::EncryptionStatus status = walletModel->getEncryptionStatus();
+    if(status == WalletModel::Locked)
+        unlockWallet();
+    else if(status == WalletModel::Unlocked)
+        lockWallet();
 }
 
 void curecoinGUI::showNormalIfMinimized(bool fToggleHidden)
