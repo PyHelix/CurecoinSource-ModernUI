@@ -11,6 +11,7 @@
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
+#include <QLocale>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 7
@@ -155,6 +156,13 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
 void OverviewPage::setNumTransactions(int count)
 {
     ui->labelNumTransactions->setText(QLocale::system().toString(count));
+}
+
+void OverviewPage::setNetworkStats(double difficulty, double networkWeight)
+{
+    QLocale locale = QLocale::system();
+    ui->labelDifficultyValue->setText(locale.toString(difficulty, 'f', 6));
+    ui->labelNetworkWeightValue->setText(locale.toString(networkWeight, 'f', 0));
 }
 
 void OverviewPage::setModel(WalletModel *model)

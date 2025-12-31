@@ -49,12 +49,15 @@
 #include <QStackedWidget>
 #include <QDateTime>
 #include <QMovie>
+#include <QFile>
 #include <QFileDialog>
 #include <QDesktopServices>
+#include <QSettings>
 #include <QTimer>
 #include <QDragEnterEvent>
 #include <QUrl>
 #include <QStyle>
+#include <QToolButton>
 #include <QtWidgets>
 
 #include <iostream>
@@ -63,6 +66,17 @@ extern CWallet* pwalletMain;
 extern int64 nLastCoinStakeSearchInterval;
 extern unsigned int nStakeTargetSpacing;
 double GetPoSKernelPS();
+
+static void ApplyAppStyle(bool darkMode)
+{
+    const char *stylePath = darkMode ? ":/styles/app_dark" : ":/styles/app";
+    QFile styleFile(stylePath);
+    if (styleFile.open(QIODevice::ReadOnly))
+    {
+        QString style = QString::fromUtf8(styleFile.readAll());
+        qApp->setStyleSheet(style);
+    }
+}
 
 curecoinGUI::curecoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -73,9 +87,18 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     unlockWalletAction(0),
     lockWalletAction(0),
     aboutQtAction(0),
+    darkModeAction(0),
+    darkModeEnabled(false),
+    currentBalanceValue(-1),
     trayIcon(0),
     notificator(0),
-    rpcConsole(0)
+    transactionView(0),
+    rpcConsole(0),
+    menuButton(0),
+    toolbarMenu(0),
+    balanceCard(0),
+    balanceTitleLabel(0),
+    balanceValueLabel(0)
 {
     resize(850, 550);
     setWindowTitle(tr("Curecoin") + " - " + tr("Wallet"));
@@ -89,11 +112,16 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     // Accept D&D of URIs
     setAcceptDrops(true);
 
+    QSettings settings;
+    darkModeEnabled = settings.value("ui/darkMode", false).toBool();
+    ApplyAppStyle(darkModeEnabled);
+
     // Create actions for the toolbar, menu bar and tray/dock icon
     createActions();
 
     // Create application menu bar
     createMenuBar();
+    menuBar()->setVisible(false);
 
     // Create the toolbars
     createToolBars();
@@ -105,16 +133,22 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     overviewPage = new OverviewPage();
 
     transactionsPage = new QWidget(this);
+    transactionsPage->setObjectName("transactionsPage");
     QVBoxLayout *vbox = new QVBoxLayout();
+    vbox->setContentsMargins(18, 18, 18, 18);
+    vbox->setSpacing(12);
     transactionView = new TransactionView(this);
     vbox->addWidget(transactionView);
     transactionsPage->setLayout(vbox);
 
     addressBookPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
+    addressBookPage->setContentsMargins(18, 18, 18, 18);
 
     receiveCoinsPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    receiveCoinsPage->setContentsMargins(18, 18, 18, 18);
 
     sendCoinsPage = new SendCoinsDialog(this);
+    sendCoinsPage->setContentsMargins(18, 18, 18, 18);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
@@ -125,32 +159,30 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
     setCentralWidget(centralWidget);
+    centralWidget->setObjectName("centralStack");
+    centralWidget->setContentsMargins(16, 16, 16, 16);
 
     // Create status bar
     statusBar();
 
     // Status bar notification icons
     QFrame *frameBlocks = new QFrame();
+    frameBlocks->setObjectName("statusIcons");
     frameBlocks->setContentsMargins(0,0,0,0);
     // frameBlocks->setMinimumWidth(56);
     // frameBlocks->setMaximumWidth(56);
     frameBlocks->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     QHBoxLayout *frameBlocksLayout = new QHBoxLayout(frameBlocks);
-    frameBlocksLayout->setContentsMargins(3,0,3,0);
-    frameBlocksLayout->setSpacing(3);
+    frameBlocksLayout->setContentsMargins(8,4,8,4);
+    frameBlocksLayout->setSpacing(8);
     labelEncryptionIcon = new QLabel();
     labelConnectionsIcon = new QLabel();
     labelBlocksIcon = new QLabel();
     labelStakingIcon = new QLabel();
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelEncryptionIcon);
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelStakingIcon);
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelConnectionsIcon);
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelBlocksIcon);
-    frameBlocksLayout->addStretch();
 
 
         QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
@@ -169,11 +201,7 @@ curecoinGUI::curecoinGUI(QWidget *parent):
     // Override style sheet for progress bar for styles that have a segmented progress bar,
     // as they make the text unreadable (workaround for issue #1071)
     // See https://qt-project.org/doc/qt-4.8/gallery.html
-    QString curStyle = qApp->style()->metaObject()->className();
-    if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
-    {
-        progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
-    }
+    updateProgressBarStyle();
 
     statusBar()->addWidget(progressBarLabel);
     statusBar()->addWidget(progressBar);
@@ -286,10 +314,17 @@ void curecoinGUI::createActions()
     openRPCConsoleAction = new QAction(QIcon(":/icons/debugwindow"), tr("&Debug window"), this);
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
 
+    darkModeAction = new QAction(QIcon(":/icons/moon"), tr("&Dark mode"), this);
+    darkModeAction->setToolTip(tr("Toggle dark theme"));
+    darkModeAction->setCheckable(true);
+    darkModeAction->setChecked(darkModeEnabled);
+    updateDarkModeIcon();
+
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(aboutQtAction, SIGNAL(triggered()), qApp, SLOT(aboutQt()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
+    connect(darkModeAction, SIGNAL(toggled(bool)), this, SLOT(toggleDarkMode(bool)));
     connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
     connect(encryptWalletAction, SIGNAL(triggered(bool)), this, SLOT(encryptWallet(bool)));
     connect(backupWalletAction, SIGNAL(triggered()), this, SLOT(backupWallet()));
@@ -328,6 +363,7 @@ void curecoinGUI::createMenuBar()
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
     settings->addSeparator();
+    settings->addAction(darkModeAction);
     settings->addAction(optionsAction);
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
@@ -339,17 +375,130 @@ void curecoinGUI::createMenuBar()
 
 void curecoinGUI::createToolBars()
 {
-    QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
-    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    QToolBar *toolbar = new QToolBar(tr("Navigation"), this);
+    toolbar->setObjectName("navBar");
+    addToolBar(Qt::LeftToolBarArea, toolbar);
+    toolbar->setOrientation(Qt::Vertical);
+    toolbar->setIconSize(QSize(28, 28));
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    toolbar->setMovable(false);
+    toolbar->setFloatable(false);
+    toolbar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    toolbar->setMinimumWidth(120);
+
+    toolbarMenu = new QMenu(this);
+    toolbarMenu->addAction(backupWalletAction);
+    toolbarMenu->addAction(exportAction);
+    toolbarMenu->addSeparator();
+    toolbarMenu->addAction(signMessageAction);
+    toolbarMenu->addAction(verifyMessageAction);
+    toolbarMenu->addSeparator();
+    toolbarMenu->addAction(encryptWalletAction);
+    toolbarMenu->addAction(changePassphraseAction);
+    toolbarMenu->addAction(unlockWalletAction);
+    toolbarMenu->addAction(lockWalletAction);
+    toolbarMenu->addSeparator();
+    toolbarMenu->addAction(optionsAction);
+    toolbarMenu->addAction(openRPCConsoleAction);
+    toolbarMenu->addSeparator();
+    toolbarMenu->addAction(aboutAction);
+    toolbarMenu->addAction(aboutQtAction);
+    toolbarMenu->addSeparator();
+    toolbarMenu->addAction(quitAction);
+
+    menuButton = new QToolButton(this);
+    menuButton->setObjectName("menuButton");
+    menuButton->setIcon(QIcon(":/icons/hamburger"));
+    menuButton->setToolTip(tr("Menu"));
+    menuButton->setPopupMode(QToolButton::InstantPopup);
+    menuButton->setMenu(toolbarMenu);
+    menuButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    menuButton->setAutoRaise(true);
+    toolbar->addWidget(menuButton);
+    toolbar->addSeparator();
+
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
 
-    QToolBar *toolbar2 = addToolBar(tr("Actions toolbar"));
-    toolbar2->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    toolbar2->addAction(exportAction);
+    QWidget *navSpacer = new QWidget(toolbar);
+    navSpacer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    toolbar->addWidget(navSpacer);
+
+    toolbar->addAction(darkModeAction);
+    QWidget *darkWidget = toolbar->widgetForAction(darkModeAction);
+    if (darkWidget)
+    {
+        darkWidget->setObjectName("darkModeToggle");
+        QToolButton *darkButton = qobject_cast<QToolButton*>(darkWidget);
+        if (darkButton)
+            darkButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    }
+}
+
+void curecoinGUI::updateProgressBarStyle()
+{
+    if(!progressBar)
+        return;
+
+    QString curStyle = qApp->style()->metaObject()->className();
+    if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
+    {
+        if(darkModeEnabled)
+        {
+            progressBar->setStyleSheet("QProgressBar { background-color: #111a26; border: 1px solid #273244; border-radius: 8px; padding: 1px; text-align: center; color: #e6edf3; } QProgressBar::chunk { background: #4c8dff; border-radius: 8px; margin: 0px; }");
+        }
+        else
+        {
+            progressBar->setStyleSheet("QProgressBar { background-color: #eef2f6; border: 1px solid #d6dde8; border-radius: 8px; padding: 1px; text-align: center; color: #0f172a; } QProgressBar::chunk { background: #4c8dff; border-radius: 8px; margin: 0px; }");
+        }
+    }
+    else
+    {
+        progressBar->setStyleSheet("");
+    }
+}
+
+void curecoinGUI::updateDarkModeIcon()
+{
+    if(!darkModeAction)
+        return;
+
+    if(darkModeEnabled)
+    {
+        darkModeAction->setIcon(QIcon(":/icons/sun"));
+        darkModeAction->setToolTip(tr("Switch to light mode"));
+    }
+    else
+    {
+        darkModeAction->setIcon(QIcon(":/icons/moon"));
+        darkModeAction->setToolTip(tr("Switch to dark mode"));
+    }
+}
+
+void curecoinGUI::updateNetworkStats()
+{
+    if(!clientModel || !overviewPage)
+        return;
+
+    overviewPage->setNetworkStats(clientModel->GetDifficulty(), GetPoSKernelPS());
+}
+
+void curecoinGUI::refreshBalanceDisplay()
+{
+    if(!walletModel || !walletModel->getOptionsModel() || !balanceValueLabel)
+        return;
+
+    int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    if(currentBalanceValue < 0)
+    {
+        balanceValueLabel->setText(tr("--"));
+        return;
+    }
+
+    balanceValueLabel->setText(curecoinUnits::formatWithUnit(unit, currentBalanceValue));
 }
 
 void curecoinGUI::setClientModel(ClientModel *clientModel)
@@ -390,6 +539,7 @@ void curecoinGUI::setClientModel(ClientModel *clientModel)
         rpcConsole->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
+        updateNetworkStats();
     }
 }
 
@@ -410,6 +560,15 @@ void curecoinGUI::setWalletModel(WalletModel *walletModel)
         sendCoinsPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
 
+        updateBalanceDisplay(walletModel->getBalance(), walletModel->getStake(), walletModel->getUnconfirmedBalance(), walletModel->getImmatureBalance());
+        connect(walletModel, SIGNAL(balanceChanged(qint64,qint64,qint64,qint64)),
+                this, SLOT(updateBalanceDisplay(qint64,qint64,qint64,qint64)));
+        if(walletModel->getOptionsModel())
+        {
+            connect(walletModel->getOptionsModel(), SIGNAL(displayUnitChanged(int)),
+                    this, SLOT(refreshBalanceDisplay()));
+        }
+
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setEncryptionStatus(int)));
 
@@ -420,6 +579,15 @@ void curecoinGUI::setWalletModel(WalletModel *walletModel)
         // Ask for passphrase if needed
         connect(walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
     }
+}
+
+void curecoinGUI::updateBalanceDisplay(qint64 balance, qint64 stake, qint64 unconfirmed, qint64 immature)
+{
+    Q_UNUSED(stake);
+    Q_UNUSED(unconfirmed);
+    Q_UNUSED(immature);
+    currentBalanceValue = balance;
+    refreshBalanceDisplay();
 }
 
 void curecoinGUI::createTrayIcon()
@@ -477,6 +645,16 @@ void curecoinGUI::optionsClicked()
     OptionsDialog dlg;
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
+}
+
+void curecoinGUI::toggleDarkMode(bool enabled)
+{
+    darkModeEnabled = enabled;
+    QSettings settings;
+    settings.setValue("ui/darkMode", enabled);
+    ApplyAppStyle(darkModeEnabled);
+    updateProgressBarStyle();
+    updateDarkModeIcon();
 }
 
 void curecoinGUI::aboutClicked()
@@ -606,6 +784,7 @@ void curecoinGUI::setNumBlocks(int count, int nTotalBlocks)
     labelBlocksIcon->setToolTip(tooltip);
     progressBarLabel->setToolTip(tooltip);
     progressBar->setToolTip(tooltip);
+    updateNetworkStats();
 }
 
 void curecoinGUI::updateStakingIcon()
@@ -651,6 +830,7 @@ if (nLastCoinStakeSearchInterval && nWeight)
         labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins"));
     else
         labelStakingIcon->setToolTip(tr("Not staking")); }
+    updateNetworkStats();
 }
 
 

@@ -19,6 +19,7 @@
 #include <QTranslator>
 #include <QSplashScreen>
 #include <QLibraryInfo>
+#include <QPainter>
 
 #if defined(curecoin_NEED_QT_PLUGINS) && !defined(_curecoin_QT_PLUGINS_INCLUDED)
 #define _curecoin_QT_PLUGINS_INCLUDED
@@ -34,6 +35,7 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 // Need a global reference for the notifications to find the GUI
 static curecoinGUI *guiref;
 static QSplashScreen *splashref;
+static const int kSplashBannerHeight = 44;
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -83,7 +85,9 @@ static void InitMessage(const std::string &message)
 {
     if(splashref)
     {
-        splashref->showMessage(QString::fromStdString(message), Qt::AlignBottom|Qt::AlignHCenter, QColor(255,255,200));
+        splashref->showMessage(QString::fromStdString(message),
+                               Qt::AlignBottom|Qt::AlignHCenter,
+                               QColor(15, 23, 42));
         QApplication::instance()->processEvents();
     }
 }
@@ -199,7 +203,23 @@ int main(int argc, char *argv[])
     QString splashPath;
     if (GetBoolArg("-testnet")) splashPath=":/images/splash_testnet";
     else splashPath=":/images/splash";
-    QSplashScreen splash(QPixmap(splashPath), 0);
+    QPixmap basePixmap(splashPath);
+    const int bannerHeight = kSplashBannerHeight;
+    QPixmap splashPixmap(basePixmap.width(), basePixmap.height() + bannerHeight);
+    splashPixmap.fill(QColor(11, 18, 32));
+    {
+        QPainter painter(&splashPixmap);
+        painter.drawPixmap(0, 0, basePixmap);
+        QRect bannerRect(0, basePixmap.height(), basePixmap.width(), bannerHeight);
+        QLinearGradient grad(0, bannerRect.top(), 0, bannerRect.bottom());
+        grad.setColorAt(0.0, QColor(240, 244, 249));
+        grad.setColorAt(1.0, QColor(224, 231, 240));
+        painter.fillRect(bannerRect, grad);
+        painter.setPen(QColor(0, 0, 0, 30));
+        painter.drawLine(0, basePixmap.height(), basePixmap.width(), basePixmap.height());
+    }
+    QSplashScreen splash(splashPixmap, 0);
+    splash.setFont(QFont("Segoe UI", 11, QFont::DemiBold));
     if (GetBoolArg("-splash", true) && !GetBoolArg("-min"))
     {
         splash.show();

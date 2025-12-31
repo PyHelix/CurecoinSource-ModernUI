@@ -18,11 +18,14 @@ class RPCConsole;
 QT_BEGIN_NAMESPACE
 class QLabel;
 class QLineEdit;
+class QMenu;
+class QMenuBar;
 class QTableView;
 class QAbstractItemModel;
 class QModelIndex;
 class QProgressBar;
 class QStackedWidget;
+class QToolButton;
 class QUrl;
 QT_END_NAMESPACE
 
@@ -93,6 +96,10 @@ private:
     QAction *lockWalletAction;
     QAction *aboutQtAction;
     QAction *openRPCConsoleAction;
+    QAction *darkModeAction;
+
+    bool darkModeEnabled;
+    qint64 currentBalanceValue;
 
     QSystemTrayIcon *trayIcon;
     Notificator *notificator;
@@ -100,6 +107,11 @@ private:
     RPCConsole *rpcConsole;
 
     QMovie *syncIconMovie;
+    QToolButton *menuButton;
+    QMenu *toolbarMenu;
+    QWidget *balanceCard;
+    QLabel *balanceTitleLabel;
+    QLabel *balanceValueLabel;
 
     /** Create the main UI actions. */
     void createActions();
@@ -109,6 +121,10 @@ private:
     void createToolBars();
     /** Create system tray (notification) icon */
     void createTrayIcon();
+    /** Update progress bar style for current theme */
+    void updateProgressBarStyle();
+    void updateDarkModeIcon();
+    void updateNetworkStats();
 
 public slots:
     /** Set number of connections shown in the UI */
@@ -153,6 +169,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Toggle dark mode */
+    void toggleDarkMode(bool enabled);
     /** Show about dialog */
     void aboutClicked();
 #ifndef Q_OS_MAC
@@ -180,6 +198,8 @@ private slots:
     void toggleHidden();
 
     void updateStakingIcon();
+    void refreshBalanceDisplay();
+    void updateBalanceDisplay(qint64 balance, qint64 stake, qint64 unconfirmed, qint64 immature);
 };
 
 #endif
